@@ -4,7 +4,9 @@ import json
 import warnings
 import numpy as np
 from torch.utils.data import Dataset
+
 warnings.filterwarnings('ignore')
+
 
 def pc_normalize(pc):
     centroid = np.mean(pc, axis=0)
@@ -13,14 +15,58 @@ def pc_normalize(pc):
     pc = pc / m
     return pc
 
+
+class PartCustomDataset(Dataset):
+    def __init__(self, root='./data/custom_partseg_data', npoints=2500, split='train', class_choice=None, normal_channel=False):
+        self.npoints = npoints
+        self.root = root
+        self.point_clouds_dir = os.path.join(self.root,"point_clouds")
+        self.seg_dir = os.path.join(self.root,"labels")
+        self.normal_channel = normal_channel
+
+        self.ids = np.loadtxt(os.path.join(self.root, split+'.txt')).astype(np.int32)
+
+        #todo augmentation
+        foo=0
+
+    def __getitem__(self, index):
+        point_cloud_path = os.path.join(self.point_clouds_dir,str(self.ids[index])+".txt")
+        point_cloud = np.loadtxt(point_cloud_path,delimiter=",").astype(np.float32)
+        if not self.normal_channel:
+            point_set = point_cloud[:, 0:3]
+        else:
+            point_set = point_cloud[:, 0:6]
+
+        seg_path = os.path.join(self.seg_dir, str(self.ids[index]) + ".txt")
+        seg = np.loadtxt(seg_path).astype(np.int32)
+
+        point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
+        #TODO maybe normalize 3:6 too? if the colors will be>1
+
+        choice = np.random.choice(len(seg), self.npoints, replace=True)
+        # resample
+        # point_set = point_set[choice, :]
+        #
+        # seg = seg[choice] #####OF
+        point_set = point_set[-self.npoints:,:]
+        seg = seg[-self.npoints:]
+
+
+        return point_set, 0, seg
+
+    def __len__(self):
+        return len(self.ids)
+
+
+
+
 class PartNormalDataset(Dataset):
-    def __init__(self,root = './data/shapenetcore_partanno_segmentation_benchmark_v0_normal', npoints=2500, split='train', class_choice=None, normal_channel=False):
+    def __init__(self, root='./data/shapenetcore_partanno_segmentation_benchmark_v0_normal', npoints=2500, split='train', class_choice=None, normal_channel=False):
         self.npoints = npoints
         self.root = root
         self.catfile = os.path.join(self.root, 'synsetoffset2category.txt')
         self.cat = {}
         self.normal_channel = normal_channel
-
 
         with open(self.catfile, 'r') as f:
             for line in f:
@@ -29,8 +75,8 @@ class PartNormalDataset(Dataset):
         self.cat = {k: v for k, v in self.cat.items()}
         self.classes_original = dict(zip(self.cat, range(len(self.cat))))
 
-        if not class_choice is  None:
-            self.cat = {k:v for k,v in self.cat.items() if k in class_choice}
+        if not class_choice is None:
+            self.cat = {k: v for k, v in self.cat.items() if k in class_choice}
         # print(self.cat)
 
         self.meta = {}
@@ -85,7 +131,6 @@ class PartNormalDataset(Dataset):
         self.cache = {}  # from index to (point_set, cls, seg) tuple
         self.cache_size = 20000
 
-
     def __getitem__(self, index):
         if index in self.cache:
             ppoint_set, cls, seg = self.cache[index]
@@ -103,6 +148,7 @@ class PartNormalDataset(Dataset):
             if len(self.cache) < self.cache_size:
                 self.cache[index] = (point_set, cls, seg)
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
+        #TODO maybe normalize 3:6 too? if the colors will be>1
 
         choice = np.random.choice(len(seg), self.npoints, replace=True)
         # resample
@@ -113,6 +159,3 @@ class PartNormalDataset(Dataset):
 
     def __len__(self):
         return len(self.datapath)
-
-
-

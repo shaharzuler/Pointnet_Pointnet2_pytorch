@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument('--model', type=str, default='pointnet2_part_seg_msg', help='model name [default: pointnet2_part_seg_msg]')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch Size during training [default: 16]')
     parser.add_argument('--epoch', default=251, type=int, help='Epoch to run [default: 251]')
-    parser.add_argument('--learning_rate', default=0.001, type=float, help='Initial learning rate [default: 0.001]')
+    parser.add_argument('--learning_rate', default=0.01, type=float, help='Initial learning rate [default: 0.001]') #####OF
     parser.add_argument('--use_gpu', default="0", type=str, help='If run calcs on gpu')
     parser.add_argument('--gpu', type=str, default='0', help='GPU to use [default: GPU 0]')
     parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD [default: Adam]')
@@ -178,6 +178,7 @@ def main(args):
 
         '''learning one epoch'''
         for i, data in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
+            B, N, D = points.shape
             points, label, target = data
             points = points.data.numpy()
             points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
@@ -194,7 +195,7 @@ def main(args):
             target = target.view(-1, 1)[:, 0]
             pred_choice = seg_pred.data.max(1)[1]
             correct = pred_choice.eq(target.data).cpu().sum()
-            mean_correct.append(correct.item() / (args.batch_size * args.npoint))
+            mean_correct.append(correct.item() / (B * args.npoint)) ####
             loss = criterion(seg_pred, target, trans_feat)
             loss.backward()
             optimizer.step()
@@ -222,6 +223,7 @@ def main(args):
                 classifier = classifier.eval()
                 seg_pred, _ = classifier(points, to_categorical(label, num_classes))
                 cur_pred_val = seg_pred.cpu().data.numpy()
+                log_string("probs"+ str(cur_pred_val[0,0,:]))
                 cur_pred_val_logits = cur_pred_val
                 cur_pred_val = np.zeros((cur_batch_size, NUM_POINT)).astype(np.int32)
                 target = target.cpu().data.numpy()

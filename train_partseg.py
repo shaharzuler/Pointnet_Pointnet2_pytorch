@@ -94,9 +94,9 @@ def main(args):
     root = 'data/custom_partseg_data/'
 
 
-    TRAIN_DATASET = PartCustomDataset(root=root, npoints=args.npoint, split='train', normal_channel=args.normal)
+    TRAIN_DATASET = PartCustomDataset(root=root, npoints=args.npoint, split='train', normal_channel=args.normal, is_train=True)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    TEST_DATASET = PartCustomDataset(root=root, npoints=args.npoint, split='val', normal_channel=args.normal)
+    TEST_DATASET = PartCustomDataset(root=root, npoints=args.npoint, split='val', normal_channel=args.normal, is_train=False)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
     log_string("The number of training data is: %d" % len(TRAIN_DATASET))
     log_string("The number of test data is: %d" % len(TEST_DATASET))

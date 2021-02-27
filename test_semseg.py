@@ -77,7 +77,7 @@ def main(args):
 
     root = 'data/custom_partseg_data/'
 
-    TEST_DATASET_WHOLE_SCENE = PartCustomDataset(root, split='test', npoints=NUM_POINT)
+    TEST_DATASET_WHOLE_SCENE = PartCustomDataset(root, split='test', npoints=NUM_POINT, is_train=True)
     log_string("The number of test data is: %d" %  len(TEST_DATASET_WHOLE_SCENE))
 
     '''MODEL LOADING'''

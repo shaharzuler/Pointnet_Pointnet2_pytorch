@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from torch.utils.data import Dataset
+import random
 
 
 class S3DISDataset(Dataset):
@@ -88,7 +89,7 @@ def pc_normalize(pc):
 
 
 class PartCustomDataset(Dataset):
-    def __init__(self, root='./data/custom_partseg_data', npoints=4096, split='train', class_choice=None, normal_channel=False):
+    def __init__(self, root='./data/custom_partseg_data', npoints=4096, split='train', class_choice=None, normal_channel=False, is_train=True):
         self.npoints = npoints
         self.root = root
         self.point_clouds_dir = os.path.join(self.root, "point_clouds")
@@ -96,9 +97,8 @@ class PartCustomDataset(Dataset):
         self.normal_channel = normal_channel
 
         self.ids = np.loadtxt(os.path.join(self.root, split + '.txt')).astype(np.int32)
-        self.labelweights = np.array([ 1., 1., 1.])
-        # todo augmentation
-        foo = 0
+        self.labelweights = np.array([1., 1., 1.])
+        self.is_train = is_train
 
     def __getitem__(self, index):
         point_cloud_path = os.path.join(self.point_clouds_dir, str(self.ids[index]) + ".txt")
@@ -109,7 +109,7 @@ class PartCustomDataset(Dataset):
             point_set = point_cloud[:, 0:6]
 
         seg_path = os.path.join(self.seg_dir, str(self.ids[index]) + ".txt")
-        seg = np.loadtxt(seg_path).astype(np.int32)-1
+        seg = np.loadtxt(seg_path).astype(np.int32) - 1
 
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
         # TODO maybe normalize 3:6 too? if the colors will be>1
@@ -120,6 +120,11 @@ class PartCustomDataset(Dataset):
         seg = seg[choice]
         # point_set = point_set[-self.npoints:, :]
         # seg = seg[-self.npoints:]
+
+        if self.is_train:
+            flip_xz = random.randint(0, 1)
+            if flip_xz:
+                point_set[:, 1] *= -1  # todo verify that is the correct orientation with the real dataset
 
         return point_set, seg
 

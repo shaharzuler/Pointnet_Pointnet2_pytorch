@@ -92,9 +92,9 @@ def main(args):
     BATCH_SIZE = args.batch_size
 
     print("start loading training data ...")
-    TRAIN_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='train', normal_channel=args.normal)
+    TRAIN_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='train', normal_channel=args.normal, is_train=True)
     print("start loading test data ...")
-    TEST_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='val', normal_channel=args.normal)
+    TEST_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='val', normal_channel=args.normal, is_train=False)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)#, pin_memory=True, drop_last=True,
                                                  # worker_init_fn=lambda x: np.random.seed(x + int(time.time())))
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)#, pin_memory=True, drop_last=True)

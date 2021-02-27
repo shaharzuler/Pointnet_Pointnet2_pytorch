@@ -4,6 +4,7 @@ import json
 import warnings
 import numpy as np
 from torch.utils.data import Dataset
+import random
 
 warnings.filterwarnings('ignore')
 
@@ -17,47 +18,46 @@ def pc_normalize(pc):
 
 
 class PartCustomDataset(Dataset):
-    def __init__(self, root='./data/custom_partseg_data', npoints=2500, split='train', class_choice=None, normal_channel=False):
+    def __init__(self, root='./data/custom_partseg_data', npoints=2500, split='train', normal_channel=True, is_train=True):
         self.npoints = npoints
         self.root = root
-        self.point_clouds_dir = os.path.join(self.root,"point_clouds")
-        self.seg_dir = os.path.join(self.root,"labels")
+        self.point_clouds_dir = os.path.join(self.root, "point_clouds")
+        self.seg_dir = os.path.join(self.root, "labels")
         self.normal_channel = normal_channel
 
-        self.ids = np.loadtxt(os.path.join(self.root, split+'.txt')).astype(np.int32)
-
-        #todo augmentation
-        foo=0
+        self.ids = np.loadtxt(os.path.join(self.root, split + '.txt')).astype(np.int32)
+        self.is_train = is_train
 
     def __getitem__(self, index):
-        point_cloud_path = os.path.join(self.point_clouds_dir,str(self.ids[index])+".txt")
-        point_cloud = np.loadtxt(point_cloud_path,delimiter=",").astype(np.float32)
+        point_cloud_path = os.path.join(self.point_clouds_dir, str(self.ids[index]) + ".txt")
+        point_cloud = np.loadtxt(point_cloud_path, delimiter=",").astype(np.float32)
         if not self.normal_channel:
             point_set = point_cloud[:, 0:3]
         else:
             point_set = point_cloud[:, 0:6]
 
         seg_path = os.path.join(self.seg_dir, str(self.ids[index]) + ".txt")
-        seg = np.loadtxt(seg_path).astype(np.int32)
+        seg = np.loadtxt(seg_path).astype(np.int32) - 1
 
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
-        #TODO maybe normalize 3:6 too? if the colors will be>1
+        # TODO maybe normalize 3:6 too? if the colors will be>1
 
         choice = np.random.choice(len(seg), self.npoints, replace=True)
         # resample
-        # point_set = point_set[choice, :]
-        #
-        # seg = seg[choice] #####OF
-        point_set = point_set[-self.npoints:,:]
-        seg = seg[-self.npoints:]
+        point_set = point_set[choice, :]
+        seg = seg[choice]
+        # point_set = point_set[-self.npoints:,:]
+        # seg = seg[-self.npoints:]
 
+        if self.is_train:
+            flip_xz = random.randint(0,1)
+            if flip_xz:
+                point_set[:, 1] *= -1 #todo verify that is the correct orientation with the real dataset
 
         return point_set, 0, seg
 
     def __len__(self):
         return len(self.ids)
-
-
 
 
 class PartNormalDataset(Dataset):
@@ -148,7 +148,7 @@ class PartNormalDataset(Dataset):
             if len(self.cache) < self.cache_size:
                 self.cache[index] = (point_set, cls, seg)
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
-        #TODO maybe normalize 3:6 too? if the colors will be>1
+        # TODO maybe normalize 3:6 too? if the colors will be>1
 
         choice = np.random.choice(len(seg), self.npoints, replace=True)
         # resample

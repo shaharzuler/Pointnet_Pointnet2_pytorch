@@ -113,5 +113,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-#directories
+#dirs
 data
+log
+.idea

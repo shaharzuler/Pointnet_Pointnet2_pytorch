@@ -4,7 +4,7 @@ Date: Nov 2019
 """
 import argparse
 import os
-from data_utils.S3DISDataLoader import ScannetDatasetWholeScene
+from data_utils.S3DISDataLoader import PartCustomDataset
 from data_utils.indoor3d_util import g_label2color
 import torch
 import logging
@@ -19,7 +19,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-classes = ['ceiling','floor','wall','beam','column','window','door','table','chair','sofa','bookcase','board','clutter']
+classes = ["1","2","3"]#['ceiling','floor','wall','beam','column','window','door','table','chair','sofa','bookcase','board','clutter']
 class2label = {cls: i for i,cls in enumerate(classes)}
 seg_classes = class2label
 seg_label_to_cat = {}
@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=32, help='batch size in testing [default: 32]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
     parser.add_argument('--num_point', type=int, default=4096, help='Point Number [default: 4096]')
-    parser.add_argument('--log_dir', type=str, default='pointnet2_sem_seg', help='Experiment root')
+    parser.add_argument('--log_dir', type=str, default='2021-02-27_01-22', help='Experiment root')
     parser.add_argument('--visual', action='store_true', default=False, help='Whether visualize result [default: False]')
     parser.add_argument('--test_area', type=int, default=5, help='Which area to use for test, option: 1-6 [default: 5]')
     parser.add_argument('--num_votes', type=int, default=5, help='Aggregate segmentation scores with voting [default: 5]')
@@ -71,13 +71,13 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    NUM_CLASSES = 13
+    NUM_CLASSES = 3
     BATCH_SIZE = args.batch_size
     NUM_POINT = args.num_point
 
-    root = 'data/stanford_indoor3d/'
+    root = 'data/custom_partseg_data/'
 
-    TEST_DATASET_WHOLE_SCENE = ScannetDatasetWholeScene(root, split='test', test_area=args.test_area, block_points=NUM_POINT)
+    TEST_DATASET_WHOLE_SCENE = PartCustomDataset(root, split='test', npoints=NUM_POINT)
     log_string("The number of test data is: %d" %  len(TEST_DATASET_WHOLE_SCENE))
 
     '''MODEL LOADING'''

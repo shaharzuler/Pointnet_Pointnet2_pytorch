@@ -27,7 +27,6 @@ class PartCustomDataset(Dataset):
         self.ids = np.loadtxt(os.path.join(self.root, split+'.txt')).astype(np.int32)
 
         #todo augmentation
-        foo=0
 
     def __getitem__(self, index):
         point_cloud_path = os.path.join(self.point_clouds_dir,str(self.ids[index])+".txt")
@@ -38,18 +37,17 @@ class PartCustomDataset(Dataset):
             point_set = point_cloud[:, 0:6]
 
         seg_path = os.path.join(self.seg_dir, str(self.ids[index]) + ".txt")
-        seg = np.loadtxt(seg_path).astype(np.int32)
+        seg = np.loadtxt(seg_path).astype(np.int32)-1
 
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
         #TODO maybe normalize 3:6 too? if the colors will be>1
 
         choice = np.random.choice(len(seg), self.npoints, replace=True)
         # resample
-        # point_set = point_set[choice, :]
-        #
-        # seg = seg[choice] #####OF
-        point_set = point_set[-self.npoints:,:]
-        seg = seg[-self.npoints:]
+        point_set = point_set[choice, :]
+        seg = seg[choice]
+        # point_set = point_set[-self.npoints:,:]
+        # seg = seg[-self.npoints:]
 
 
         return point_set, 0, seg

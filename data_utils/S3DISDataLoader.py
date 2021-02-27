@@ -43,8 +43,8 @@ class S3DISDataset(Dataset):
 
     def __getitem__(self, idx):
         room_idx = self.room_idxs[idx]
-        points = self.room_points[room_idx]   # N * 6
-        labels = self.room_labels[room_idx]   # N
+        points = self.room_points[room_idx]  # N * 6
+        labels = self.room_labels[room_idx]  # N
         N_points = points.shape[0]
 
         while (True):
@@ -77,6 +77,55 @@ class S3DISDataset(Dataset):
 
     def __len__(self):
         return len(self.room_idxs)
+
+
+def pc_normalize(pc):
+    centroid = np.mean(pc, axis=0)
+    pc = pc - centroid
+    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
+    pc = pc / m
+    return pc
+
+
+class PartCustomDataset(Dataset):
+    def __init__(self, root='./data/custom_partseg_data', npoints=4096, split='train', class_choice=None, normal_channel=False):
+        self.npoints = npoints
+        self.root = root
+        self.point_clouds_dir = os.path.join(self.root, "point_clouds")
+        self.seg_dir = os.path.join(self.root, "labels")
+        self.normal_channel = normal_channel
+
+        self.ids = np.loadtxt(os.path.join(self.root, split + '.txt')).astype(np.int32)
+        self.labelweights = np.array([ 1., 1., 1.])
+        # todo augmentation
+        foo = 0
+
+    def __getitem__(self, index):
+        point_cloud_path = os.path.join(self.point_clouds_dir, str(self.ids[index]) + ".txt")
+        point_cloud = np.loadtxt(point_cloud_path, delimiter=",").astype(np.float32)
+        if not self.normal_channel:
+            point_set = point_cloud[:, 0:3]
+        else:
+            point_set = point_cloud[:, 0:6]
+
+        seg_path = os.path.join(self.seg_dir, str(self.ids[index]) + ".txt")
+        seg = np.loadtxt(seg_path).astype(np.int32)-1
+
+        point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
+        # TODO maybe normalize 3:6 too? if the colors will be>1
+
+        choice = np.random.choice(len(seg), self.npoints, replace=True)
+        # resample
+        point_set = point_set[choice, :]
+        seg = seg[choice]
+        # point_set = point_set[-self.npoints:, :]
+        # seg = seg[-self.npoints:]
+
+        return point_set, seg
+
+    def __len__(self):
+        return len(self.ids)
+
 
 class ScannetDatasetWholeScene():
     # prepare to give prediction on each points
@@ -116,12 +165,12 @@ class ScannetDatasetWholeScene():
 
     def __getitem__(self, index):
         point_set_ini = self.scene_points_list[index]
-        points = point_set_ini[:,:6]
+        points = point_set_ini[:, :6]
         labels = self.semantic_labels_list[index]
         coord_min, coord_max = np.amin(points, axis=0)[:3], np.amax(points, axis=0)[:3]
         grid_x = int(np.ceil(float(coord_max[0] - coord_min[0] - self.block_size) / self.stride) + 1)
         grid_y = int(np.ceil(float(coord_max[1] - coord_min[1] - self.block_size) / self.stride) + 1)
-        data_room, label_room, sample_weight, index_room = np.array([]), np.array([]), np.array([]),  np.array([])
+        data_room, label_room, sample_weight, index_room = np.array([]), np.array([]), np.array([]), np.array([])
         for index_y in range(0, grid_y):
             for index_x in range(0, grid_x):
                 s_x = coord_min[0] + index_x * self.stride
@@ -132,7 +181,7 @@ class ScannetDatasetWholeScene():
                 s_y = e_y - self.block_size
                 point_idxs = np.where(
                     (points[:, 0] >= s_x - self.padding) & (points[:, 0] <= e_x + self.padding) & (points[:, 1] >= s_y - self.padding) & (
-                                points[:, 1] <= e_y + self.padding))[0]
+                            points[:, 1] <= e_y + self.padding))[0]
                 if point_idxs.size == 0:
                     continue
                 num_batch = int(np.ceil(point_idxs.size / self.block_points))
@@ -166,6 +215,7 @@ class ScannetDatasetWholeScene():
     def __len__(self):
         return len(self.scene_points_list)
 
+
 if __name__ == '__main__':
     data_root = '/data/yxu/PointNonLocal/data/stanford_indoor3d/'
     num_point, test_area, block_size, sample_rate = 4096, 5, 1.0, 0.01
@@ -175,16 +225,21 @@ if __name__ == '__main__':
     print('point data 0 shape:', point_data.__getitem__(0)[0].shape)
     print('point label 0 shape:', point_data.__getitem__(0)[1].shape)
     import torch, time, random
+
     manual_seed = 123
     random.seed(manual_seed)
     np.random.seed(manual_seed)
     torch.manual_seed(manual_seed)
     torch.cuda.manual_seed_all(manual_seed)
+
+
     def worker_init_fn(worker_id):
         random.seed(manual_seed + worker_id)
+
+
     train_loader = torch.utils.data.DataLoader(point_data, batch_size=16, shuffle=True, num_workers=16, pin_memory=True, worker_init_fn=worker_init_fn)
     for idx in range(4):
         end = time.time()
         for i, (input, target) in enumerate(train_loader):
-            print('time: {}/{}--{}'.format(i+1, len(train_loader), time.time() - end))
+            print('time: {}/{}--{}'.format(i + 1, len(train_loader), time.time() - end))
             end = time.time()

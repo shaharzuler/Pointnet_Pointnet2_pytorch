@@ -4,7 +4,7 @@ Date: Nov 2019
 """
 import argparse
 import os
-from data_utils.ShapeNetDataLoader import PartCustomDataset as PartNormalDataset ####
+from data_utils.ShapeNetDataLoader import PartCustomDataset
 import torch
 import datetime
 import logging
@@ -20,11 +20,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-seg_classes = {'Earphone': [16, 17, 18], 'Motorbike': [30, 31, 32, 33, 34, 35], 'Rocket': [41, 42, 43], 'Car': [8, 9, 10, 11], 'Laptop': [28, 29], 'Cap': [6, 7], 'Skateboard': [44, 45, 46],
-               'Mug': [36, 37], 'Guitar': [19, 20, 21], 'Bag': [4, 5], 'Lamp': [24, 25, 26, 27], 'Table': [47, 48, 49], 'Airplane': [0, 1, 2, 3], 'Pistol': [38, 39, 40], 'Chair': [12, 13, 14, 15],
-               'Knife': [22, 23]}
-
-seg_classes = {'CustomPart': [0,1,2,3]}
+seg_classes = {'CustomPart': [0,1,2]}
 
 seg_label_to_cat = {}  # {0:Airplane, 1:Airplane, ...49:Table}
 for cat in seg_classes.keys():
@@ -44,7 +40,7 @@ def parse_args():
     parser = argparse.ArgumentParser('Model')
     parser.add_argument('--model', type=str, default='pointnet2_part_seg_msg', help='model name [default: pointnet2_part_seg_msg]')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch Size during training [default: 16]')
-    parser.add_argument('--epoch', default=251, type=int, help='Epoch to run [default: 251]')
+    parser.add_argument('--epoch', default=1000, type=int, help='Epoch to run [default: 251]')
     parser.add_argument('--learning_rate', default=0.001, type=float, help='Initial learning rate [default: 0.001]')
     parser.add_argument('--use_gpu', default="0", type=str, help='If run calcs on gpu')
     parser.add_argument('--gpu', type=str, default='0', help='GPU to use [default: GPU 0]')
@@ -95,18 +91,17 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    #root = 'data/shapenetcore_partanno_segmentation_benchmark_v0_normal/'
     root = 'data/custom_partseg_data/'
 
 
-    TRAIN_DATASET = PartNormalDataset(root=root, npoints=args.npoint, split='train', normal_channel=args.normal)
+    TRAIN_DATASET = PartCustomDataset(root=root, npoints=args.npoint, split='train', normal_channel=args.normal)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    TEST_DATASET = PartNormalDataset(root=root, npoints=args.npoint, split='val', normal_channel=args.normal)
+    TEST_DATASET = PartCustomDataset(root=root, npoints=args.npoint, split='val', normal_channel=args.normal)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
     log_string("The number of training data is: %d" % len(TRAIN_DATASET))
     log_string("The number of test data is: %d" % len(TEST_DATASET))
-    num_classes = 16 #1
-    num_part = 4#50
+    num_classes = 16 #thers'a a bug here, the 16 can't be changed
+    num_part = 3
     '''MODEL LOADING'''
     MODEL = importlib.import_module(args.model)
     shutil.copy('models/%s.py' % args.model, str(experiment_dir))
@@ -179,6 +174,7 @@ def main(args):
         '''learning one epoch'''
         for i, data in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
             points, label, target = data
+            B, N, D = points.shape #fixed issue of calc metrics of batch size smaller than planned
             points = points.data.numpy()
             points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
             points[:, :, 0:3] = provider.shift_point_cloud(points[:, :, 0:3])
@@ -194,7 +190,7 @@ def main(args):
             target = target.view(-1, 1)[:, 0]
             pred_choice = seg_pred.data.max(1)[1]
             correct = pred_choice.eq(target.data).cpu().sum()
-            mean_correct.append(correct.item() / (args.batch_size * args.npoint))
+            mean_correct.append(correct.item() / (B * args.npoint))
             loss = criterion(seg_pred, target, trans_feat)
             loss.backward()
             optimizer.step()
@@ -293,7 +289,6 @@ def main(args):
         log_string('Best class avg mIOU is: %.5f' % best_class_avg_iou)
         log_string('Best inctance avg mIOU is: %.5f' % best_inctance_avg_iou)
         global_epoch += 1
-    foo=0
 
 
 if __name__ == '__main__':

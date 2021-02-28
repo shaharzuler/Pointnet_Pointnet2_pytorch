@@ -2,7 +2,7 @@ import open3d as o3d
 import numpy as np
 
 #point_set.shape==N,3
-
+import open3d as o3d
 model_pCloud0 = o3d.geometry.PointCloud()
 model_pCloud0.points = o3d.utility.Vector3dVector(point_set[seg==0,:])
 model_pCloud0.paint_uniform_color([0.1, 0.9, 0.1])

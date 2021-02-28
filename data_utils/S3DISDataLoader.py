@@ -114,22 +114,59 @@ class PartCustomDataset(Dataset):
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
         # TODO maybe normalize 3:6 too? if the colors will be>1
 
-        choice = np.random.choice(len(seg), self.npoints, replace=True)
-        # resample
-        point_set = point_set[choice, :]
-        seg = seg[choice]
+        # region fixing temp fake data issues TEMP
+        min_npoints = min(seg.shape[0], point_set.shape[0])
+        point_set = point_set[-min_npoints:, :]
+        seg = seg[-min_npoints:]
+        # endregion fixing temp fake data issues TEMP
+
+        # resample (randomly)
+        downsample_ind = np.random.choice(len(seg), self.npoints, replace=True)
+        point_set = point_set[downsample_ind, :]
+        seg = seg[downsample_ind]
+
+        # for experimental non random sample (simple slicing):
         # point_set = point_set[-self.npoints:, :]
         # seg = seg[-self.npoints:]
 
+        ##region bug fix attempt
+        # p = np.concatenate([point_set, seg.reshape(-1, 1)], axis=1)[downsample_ind, :]
+        # point_set = p[:, :6]
+        # seg = p[:, 6]
+        ##endregion bug fix attempt
+
+        # TODO this after inference:
+        # from PostProcess.PostProcess import KMeansPostProcessor
+        # seg = KMeansPostProcessor().cluster_mobile_links(point_set, seg)
+
+        import open3d as o3d
+
+        model_pCloud2 = o3d.geometry.PointCloud()
+        model_pCloud2.points = o3d.utility.Vector3dVector(point_set[seg == 2, :3])
+        model_pCloud2.paint_uniform_color([0.1, 0.1, 0.9])
+
+        vis = o3d.visualization.Visualizer()
+        vis.add_geometry(model_pCloud2)
+        vis.capture_screen_image("path.png", True)
+
         if self.is_train:
-            flip_xz = random.randint(0, 1)
-            if flip_xz:
-                point_set[:, 1] *= -1  # todo verify that is the correct orientation with the real dataset
+            point_set = self.augment(point_set)
 
         return point_set, seg
 
     def __len__(self):
         return len(self.ids)
+
+    def augment(self, point_set):
+        point_set = self.random_mirror(point_set, axis=0)
+        point_set = self.random_mirror(point_set, axis=1)
+        return point_set
+
+    def random_mirror(self, point_set, axis):
+        mirror_flag = random.randint(0, 1)
+        if mirror_flag:
+            point_set[:, axis] *= -1  # todo verify that is the correct orientation with the real dataset
+        return point_set
 
 
 class ScannetDatasetWholeScene():

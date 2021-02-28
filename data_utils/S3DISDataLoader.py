@@ -97,7 +97,7 @@ class PartCustomDataset(Dataset):
         self.normal_channel = normal_channel
 
         self.ids = np.loadtxt(os.path.join(self.root, split + '.txt')).astype(np.int32)
-        self.labelweights = np.array([1., 1., 1.])
+        self.labelweights = np.array([1., 1.])
         self.is_train = is_train
 
     def __getitem__(self, index):
@@ -110,6 +110,7 @@ class PartCustomDataset(Dataset):
 
         seg_path = os.path.join(self.seg_dir, str(self.ids[index]) + ".txt")
         seg = np.loadtxt(seg_path).astype(np.int32) - 1
+        seg[seg==2]=1
 
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
         # TODO maybe normalize cols 3:6 too? if the colors will be>1
@@ -137,11 +138,6 @@ class PartCustomDataset(Dataset):
         #TODO this after inference:
         # from PostProcess.PostProcess import KMeansPostProcessor
         # seg = KMeansPostProcessor().cluster_mobile_links(point_set, seg)
-
-        #TODO this for visualization:
-        # from utils.VisualizationUtils import VisualizationUtils
-        # VisualizationUtils().save_point_cloud_image("path.png",point_set,seg)
-
 
         return point_set, seg #todo in inference time return indices
 

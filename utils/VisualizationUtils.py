@@ -2,29 +2,49 @@ import open3d as o3d
 import numpy as np
 from mayavi import mlab
 import random
+import time
+import os
+import gc
+import torch
 
 
 class VisualizationUtils():
     def __init__(self):
         random.seed(1)
+        # os.environ['ETS_TOOLKIT'] = 'qt4'
 
-    def save_point_cloud_image(self, path, point_cloud,  seg=None):
+    def save_point_cloud_image(self, path, point_cloud, seg=None, target=None):
         pcds = []
+        colors = []
         if seg is not None:
             for i in set(seg):
                 pcd = point_cloud[seg == i, :3]
                 pcds.append(pcd)
+                colors.append((random.random(), random.random(), random.random()))
         else:
             pcds.append(point_cloud)
+            colors.append((random.random(), random.random(), random.random()))
 
-        mlab.figure()
-        for pcd in pcds:
-            mlab.points3d(pcd[:, 0], pcd[:, 1], pcd[:, 2], color=(random.random(), random.random(), random.random()))
-        mlab.view()
+        target_pcds = []
+        if target is not None:
+            for i in set(target):
+                pcd = point_cloud[target == i, :3]
+                target_pcds.append(pcd)
+
+        mlab.figure(size=(300, 300))
+        for pcd,color in zip(pcds,colors):
+            mlab.points3d(pcd[:, 0], pcd[:, 1], pcd[:, 2], color=color)
+        if target is not None:
+            for target_pcd, color in zip(target_pcds, colors):
+                mlab.points3d(target_pcd[:, 0]+3, target_pcd[:, 1], target_pcd[:, 2], color=color)
+        mlab.view(azimuth=45, elevation=45, roll=45)
         # mlab.show()
-        if not(path.endswith(".png")):
+        if not (path.endswith(".png")):
             path += ".png"
-        mlab.savefig(path)
+        mlab.savefig(path, size=(300, 300))
+        mlab.close()
+        gc.collect()
+        torch.cuda.empty_cache()
 
 
 def garbage():

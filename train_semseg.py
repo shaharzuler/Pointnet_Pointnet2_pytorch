@@ -3,25 +3,29 @@ Author: Benny
 Date: Nov 2019
 """
 import argparse
-import os
-from data_utils.S3DISDataLoader import PartCustomDataset
-import torch
 import datetime
-import logging
-from pathlib import Path
-import sys
 import importlib
+import logging
+import os
 import shutil
-from tqdm import tqdm
-import provider
+import sys
+from pathlib import Path
+
 import numpy as np
-import time
+import torch
+from tqdm import tqdm
+
+
+import provider
+from data_utils.S3DISDataLoader import PartCustomDataset
+from utils.LoggingUtils import TensorBoardHandler
+from utils.VisualizationUtils import VisualizationUtils
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-classes = [ "1", "2", "3"]
+classes = ["1", "2", "3"]
 class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
 seg_label_to_cat = {}
@@ -71,6 +75,9 @@ def main(args):
     checkpoints_dir.mkdir(exist_ok=True)
     log_dir = experiment_dir.joinpath('logs/')
     log_dir.mkdir(exist_ok=True)
+    TB_handler = TensorBoardHandler(experiment_dir)
+    images_dir = experiment_dir.joinpath('images/')
+    images_dir.mkdir(exist_ok=True)
 
     '''LOG'''
     args = parse_args()
@@ -84,10 +91,9 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    root = 'data/stanford_indoor3d/'
     root = 'data/custom_partseg_data/'
 
-    NUM_CLASSES = 3
+    NUM_CLASSES = 2
     NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
 
@@ -95,9 +101,9 @@ def main(args):
     TRAIN_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='train', normal_channel=args.normal, is_train=True)
     print("start loading test data ...")
     TEST_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='val', normal_channel=args.normal, is_train=False)
-    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)#, pin_memory=True, drop_last=True,
-                                                 # worker_init_fn=lambda x: np.random.seed(x + int(time.time())))
-    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)#, pin_memory=True, drop_last=True)
+    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)  # , pin_memory=True, drop_last=True,
+    # worker_init_fn=lambda x: np.random.seed(x + int(time.time())))
+    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)  # , pin_memory=True, drop_last=True)
     weights = torch.Tensor(TRAIN_DATASET.labelweights).cuda()
 
     log_string("The number of training data is: %d" % len(TRAIN_DATASET))
@@ -152,7 +158,7 @@ def main(args):
 
     global_epoch = 0
     best_iou = 0
-
+    visualization_data = {}
     for epoch in range(start_epoch, args.epoch):
         '''Train on chopped scenes'''
         log_string('**** Epoch %d (%d/%s) ****' % (global_epoch + 1, epoch + 1, args.epoch))
@@ -170,9 +176,8 @@ def main(args):
         total_seen = 0
         loss_sum = 0
         for i, data in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
-
             points, target = data
-            B, N, D = points.shape #fixed issue of calc metrics of batch size smaller than planned
+            B, N, D = points.shape  # fixed issue of calc metrics of batch size smaller than planned
             points = points.data.numpy()
             points[:, :, :3] = provider.rotate_point_cloud_z(points[:, :, :3])
             points = torch.Tensor(points)
@@ -192,10 +197,10 @@ def main(args):
             total_correct += correct
             total_seen += (B * NUM_POINT)
             loss_sum += loss
-        if num_batches > 0:
-            log_string('Training mean loss: %f' % (loss_sum / num_batches))
-        if total_seen > 0:
-            log_string('Training accuracy: %f' % (total_correct / float(total_seen)))
+        log_string('Training mean loss: %f' % (loss_sum / float(num_batches)))
+        TB_handler.write_loss("train", loss_sum / float(num_batches), epoch)
+        log_string('Training accuracy: %f' % (total_correct / float(total_seen)))
+        TB_handler.write_acc("train", total_correct / float(total_seen), epoch)
 
         if epoch % 5 == 0:
             logger.info('Save model...')
@@ -223,6 +228,8 @@ def main(args):
                 log_string('---- EPOCH %03d EVALUATION ----' % (global_epoch + 1))
                 for i, data in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
                     points, target = data
+                    visualization_data["points"] = points.cpu().numpy()[0,:,:]
+                    visualization_data["target"] = target.cpu().numpy()[0, :]
                     points = points.data.numpy()
                     points = torch.Tensor(points)
                     points, target = points.float().cuda(), target.long().cuda()
@@ -230,6 +237,7 @@ def main(args):
                     classifier = classifier.eval()
                     seg_pred, trans_feat = classifier(points)
                     pred_val = seg_pred.contiguous().cpu().data.numpy()
+                    visualization_data["seg_pred"] = np.argmax(seg_pred.contiguous()[0,:,:].view(-1, NUM_CLASSES).cpu().numpy(),axis=1)
                     seg_pred = seg_pred.contiguous().view(-1, NUM_CLASSES)
                     batch_label = target.cpu().data.numpy()
                     target = target.view(-1, 1)[:, 0]
@@ -245,13 +253,18 @@ def main(args):
                         total_seen_class[l] += np.sum((batch_label == l))
                         total_correct_class[l] += np.sum((pred_val == l) & (batch_label == l))
                         total_iou_deno_class[l] += np.sum(((pred_val == l) | (batch_label == l)))
+                if epoch%10==0:
+                    VisualizationUtils().save_point_cloud_image(os.path.join(images_dir, "e_" + str(epoch) + ".png"),
+                                                            visualization_data["points"],
+                                                            visualization_data["seg_pred"],
+                                                            visualization_data["target"])
                 labelweights = labelweights.astype(np.float32) / np.sum(labelweights.astype(np.float32))
                 mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float) + 1e-6))
-                if num_batches > 0:
-                    log_string('eval mean loss: %f' % (loss_sum / float(num_batches)))
+                log_string('eval mean loss: %f' % (loss_sum / float(num_batches)))
+                TB_handler.write_loss("val", loss_sum / float(num_batches), epoch)
                 log_string('eval point avg class IoU: %f' % (mIoU))
-                if total_seen > 0:
-                    log_string('eval point accuracy: %f' % (total_correct / float(total_seen)))
+                log_string('eval point accuracy: %f' % (total_correct / float(total_seen)))
+                TB_handler.write_acc("val", total_correct / float(total_seen), epoch)
                 log_string('eval point avg class acc: %f' % (
                     np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float) + 1e-6))))
                 iou_per_class_str = '------- IoU --------\n'

@@ -112,7 +112,7 @@ class PartCustomDataset(Dataset):
         seg = np.loadtxt(seg_path).astype(np.int32) - 1
 
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
-        # TODO maybe normalize 3:6 too? if the colors will be>1
+        # TODO maybe normalize cols 3:6 too? if the colors will be>1
 
         # region fixing temp fake data issues TEMP
         min_npoints = min(seg.shape[0], point_set.shape[0])
@@ -120,39 +120,30 @@ class PartCustomDataset(Dataset):
         seg = seg[-min_npoints:]
         # endregion fixing temp fake data issues TEMP
 
-        # resample (randomly)
+        # resample (randomly):
         downsample_ind = np.random.choice(len(seg), self.npoints, replace=True)
         point_set = point_set[downsample_ind, :]
         seg = seg[downsample_ind]
 
-        # for experimental non random sample (simple slicing):
-        # point_set = point_set[-self.npoints:, :]
-        # seg = seg[-self.npoints:]
-
-        ##region bug fix attempt
+        ##region bug fix attempt TEMP
         # p = np.concatenate([point_set, seg.reshape(-1, 1)], axis=1)[downsample_ind, :]
         # point_set = p[:, :6]
         # seg = p[:, 6]
-        ##endregion bug fix attempt
-
-        # TODO this after inference:
-        # from PostProcess.PostProcess import KMeansPostProcessor
-        # seg = KMeansPostProcessor().cluster_mobile_links(point_set, seg)
-
-        import open3d as o3d
-
-        model_pCloud2 = o3d.geometry.PointCloud()
-        model_pCloud2.points = o3d.utility.Vector3dVector(point_set[seg == 2, :3])
-        model_pCloud2.paint_uniform_color([0.1, 0.1, 0.9])
-
-        vis = o3d.visualization.Visualizer()
-        vis.add_geometry(model_pCloud2)
-        vis.capture_screen_image("path.png", True)
+        ##endregion bug fix attempt #TEMP
 
         if self.is_train:
             point_set = self.augment(point_set)
 
-        return point_set, seg
+        #TODO this after inference:
+        # from PostProcess.PostProcess import KMeansPostProcessor
+        # seg = KMeansPostProcessor().cluster_mobile_links(point_set, seg)
+
+        #TODO this for visualization:
+        # from utils.VisualizationUtils import VisualizationUtils
+        # VisualizationUtils().save_point_cloud_image("path.png",point_set,seg)
+
+
+        return point_set, seg #todo in inference time return indices
 
     def __len__(self):
         return len(self.ids)

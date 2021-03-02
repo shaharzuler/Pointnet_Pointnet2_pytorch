@@ -1,29 +1,26 @@
 import open3d as o3d
 import numpy as np
 from mayavi import mlab
-import random
-import time
-import os
 import gc
-import torch
 
 
 class VisualizationUtils():
     def __init__(self):
-        random.seed(1)
+        #
+        self.colors = [(0.9,0.1,0.1),(0.1,0.1,0.9), (0.1,0.9,0.1)] #todo add more colors to support more classes
         # os.environ['ETS_TOOLKIT'] = 'qt4'
 
     def save_point_cloud_image(self, path, point_cloud, seg=None, target=None):
         pcds = []
-        colors = []
         if seg is not None:
-            for i in set(seg):
+            set_ = set(target) if target is not None else set(seg)
+            for i in set_:
                 pcd = point_cloud[seg == i, :3]
                 pcds.append(pcd)
-                colors.append((random.random(), random.random(), random.random()))
+            colors = self.colors[:len(pcds)]
         else:
             pcds.append(point_cloud)
-            colors.append((random.random(), random.random(), random.random()))
+            colors=self.colors[0]
 
         target_pcds = []
         if target is not None:
@@ -33,18 +30,18 @@ class VisualizationUtils():
 
         mlab.figure(size=(300, 300))
         for pcd,color in zip(pcds,colors):
-            mlab.points3d(pcd[:, 0], pcd[:, 1], pcd[:, 2], color=color)
+            mlab.points3d(pcd[:, 0], pcd[:, 1], pcd[:, 2], color=color, scale_factor=0.035)
         if target is not None:
             for target_pcd, color in zip(target_pcds, colors):
-                mlab.points3d(target_pcd[:, 0]+3, target_pcd[:, 1], target_pcd[:, 2], color=color)
-        mlab.view(azimuth=45, elevation=45, roll=45)
+                mlab.points3d(target_pcd[:, 0]+3, target_pcd[:, 1], target_pcd[:, 2], color=color, scale_factor=0.035)
+        mlab.view(azimuth=90, elevation=165, roll=180)
+
         # mlab.show()
         if not (path.endswith(".png")):
             path += ".png"
         mlab.savefig(path, size=(300, 300))
         mlab.close()
         gc.collect()
-        torch.cuda.empty_cache()
 
 
 def garbage():

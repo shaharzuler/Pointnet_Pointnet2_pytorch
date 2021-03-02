@@ -2,6 +2,7 @@ import os
 import numpy as np
 from torch.utils.data import Dataset
 import random
+import torch
 
 
 class S3DISDataset(Dataset):
@@ -89,57 +90,59 @@ def pc_normalize(pc):
 
 
 class PartCustomDataset(Dataset):
-    def __init__(self, root='./data/custom_partseg_data', npoints=4096, split='train', class_choice=None, normal_channel=False, is_train=True):
+    def __init__(self, root='./data/custom_partseg_data', npoints=4096, split='train', class_choice=None, normal_channel=False, is_train=True, minimal_preprocess=True):
         self.npoints = npoints
         self.root = root
-        self.point_clouds_dir = os.path.join(self.root, "point_clouds")
-        self.seg_dir = os.path.join(self.root, "labels")
+        self.point_clouds_dir = os.path.join(self.root, "Points")
+        self.seg_dir = os.path.join(self.root, "Links")
         self.normal_channel = normal_channel
-
-        self.ids = np.loadtxt(os.path.join(self.root, split + '.txt')).astype(np.int32)
-        self.labelweights = np.array([1., 1.])
+        if minimal_preprocess and is_train:
+            split_ = "train_preprocessed"
+        try:
+            with open(os.path.join(self.root, split_ + '.txt')) as f:
+                self.ids = f.read().splitlines()
+        except:
+            with open(os.path.join(self.root, split + '.txt')) as f:
+                self.ids = f.read().splitlines()
+        self.labelweights = np.array([0.2, 0.8]) #np.array([1., 1.])
         self.is_train = is_train
+        self.minimal_preprocess = minimal_preprocess
 
     def __getitem__(self, index):
         point_cloud_path = os.path.join(self.point_clouds_dir, str(self.ids[index]) + ".txt")
-        point_cloud = np.loadtxt(point_cloud_path, delimiter=",").astype(np.float32)
-        if not self.normal_channel:
-            point_set = point_cloud[:, 0:3]
-        else:
-            point_set = point_cloud[:, 0:6]
+        point_set = np.loadtxt(point_cloud_path).astype(np.float32)
+        if not(self.minimal_preprocess):
+            if point_set.shape[1]==7: #case argb format
+                point_set = np.delete(point_set, 3, axis=1) #remove a column
+            if not self.normal_channel:
+                point_set = point_set[:, 0:3]
+            else:
+                point_set = point_set[:, 0:6]
 
         seg_path = os.path.join(self.seg_dir, str(self.ids[index]) + ".txt")
-        seg = np.loadtxt(seg_path).astype(np.int32) - 1
-        seg[seg==2]=1
+        seg = np.loadtxt(seg_path).astype(np.int32)
+        reduce_label = 0 if 0 in seg else 1
+        seg -= reduce_label
 
-        point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
-        # TODO maybe normalize cols 3:6 too? if the colors will be>1
+        seg[seg==2]=1 #hard coded for reducing 2 classes into 1
 
-        # region fixing temp fake data issues TEMP
-        min_npoints = min(seg.shape[0], point_set.shape[0])
-        point_set = point_set[-min_npoints:, :]
-        seg = seg[-min_npoints:]
-        # endregion fixing temp fake data issues TEMP
+        if not(self.minimal_preprocess):
+            point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
+            point_set[:,3:] /= 255
 
-        # resample (randomly):
-        downsample_ind = np.random.choice(len(seg), self.npoints, replace=True)
-        point_set = point_set[downsample_ind, :]
-        seg = seg[downsample_ind]
+            # resample (randomly):
+            downsample_ind = np.random.choice(len(seg), self.npoints, replace=True)
+            point_set = point_set[downsample_ind, :]
+            seg = seg[downsample_ind]
 
-        ##region bug fix attempt TEMP
-        # p = np.concatenate([point_set, seg.reshape(-1, 1)], axis=1)[downsample_ind, :]
-        # point_set = p[:, :6]
-        # seg = p[:, 6]
-        ##endregion bug fix attempt #TEMP
-
-        if self.is_train:
-            point_set = self.augment(point_set)
+            if self.is_train:
+                point_set = self.augment(point_set)
 
         #TODO this after inference:
         # from PostProcess.PostProcess import KMeansPostProcessor
         # seg = KMeansPostProcessor().cluster_mobile_links(point_set, seg)
 
-        return point_set, seg #todo in inference time return indices
+        return torch.tensor(point_set), torch.tensor(seg) #todo for inference time also return indices
 
     def __len__(self):
         return len(self.ids)

@@ -43,11 +43,12 @@ def parse_args():
     parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD [default: Adam]')
     parser.add_argument('--log_dir', type=str, default=None, help='Log path [default: None]')
     parser.add_argument('--decay_rate', type=float, default=1e-4, help='weight decay [default: 1e-4]')
-    parser.add_argument('--npoint', type=int, default=2048, help='Point Number [default: 4096]')
+    parser.add_argument('--npoint', type=int, default=4096, help='Point Number [default: 4096]')
     parser.add_argument('--step_size', type=int, default=10, help='Decay step for lr decay [default: every 10 epochs]')
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
     parser.add_argument('--test_area', type=int, default=5, help='Which area to use for test, option: 1-6 [default: 5]')
     parser.add_argument('--normal', action='store_true', default=True, help='Whether to use normal information [default: True]')
+    parser.add_argument('--save_image_every', default=5, help='epoch frequency for saving images')
 
     return parser.parse_args()
 
@@ -98,9 +99,9 @@ def main(args):
     BATCH_SIZE = args.batch_size
 
     print("start loading training data ...")
-    TRAIN_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='train', normal_channel=args.normal, is_train=True)
+    TRAIN_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='train', normal_channel=args.normal, is_train=True,minimal_preprocess=True)
     print("start loading test data ...")
-    TEST_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='val', normal_channel=args.normal, is_train=False)
+    TEST_DATASET = PartCustomDataset(root=root, npoints=NUM_POINT, split='val', normal_channel=args.normal, is_train=False, minimal_preprocess=False)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)  # , pin_memory=True, drop_last=True,
     # worker_init_fn=lambda x: np.random.seed(x + int(time.time())))
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)  # , pin_memory=True, drop_last=True)
@@ -253,7 +254,7 @@ def main(args):
                         total_seen_class[l] += np.sum((batch_label == l))
                         total_correct_class[l] += np.sum((pred_val == l) & (batch_label == l))
                         total_iou_deno_class[l] += np.sum(((pred_val == l) | (batch_label == l)))
-                if epoch%10==0:
+                if epoch%args.save_image_every==0:
                     VisualizationUtils().save_point_cloud_image(os.path.join(images_dir, "e_" + str(epoch) + ".png"),
                                                             visualization_data["points"],
                                                             visualization_data["seg_pred"],
@@ -263,6 +264,7 @@ def main(args):
                 log_string('eval mean loss: %f' % (loss_sum / float(num_batches)))
                 TB_handler.write_loss("val", loss_sum / float(num_batches), epoch)
                 log_string('eval point avg class IoU: %f' % (mIoU))
+                TB_handler.write_mIoU("val", mIoU, epoch)
                 log_string('eval point accuracy: %f' % (total_correct / float(total_seen)))
                 TB_handler.write_acc("val", total_correct / float(total_seen), epoch)
                 log_string('eval point avg class acc: %f' % (
@@ -279,7 +281,7 @@ def main(args):
                 if mIoU >= best_iou:
                     best_iou = mIoU
                     logger.info('Save model...')
-                    savepath = str(checkpoints_dir) + '/best_model.pth'
+                    savepath = str(checkpoints_dir) + '/best_model'+str(epoch)+'.pth'
                     log_string('Saving at %s' % savepath)
                     state = {
                         'epoch': epoch,

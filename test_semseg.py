@@ -6,6 +6,9 @@ import argparse
 import os
 from data_utils.S3DISDataLoader import PartCustomDataset
 from data_utils.indoor3d_util import g_label2color
+from utils.VisualizationUtils import VisualizationUtils
+from PostProcess.PostProcess import KMeansPostProcessor
+
 import torch
 import logging
 from pathlib import Path
@@ -19,35 +22,43 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-classes = ["1","2","3"]#['ceiling','floor','wall','beam','column','window','door','table','chair','sofa','bookcase','board','clutter']
-class2label = {cls: i for i,cls in enumerate(classes)}
+classes = ["1", "2"]  # ,"3"]#['ceiling','floor','wall','beam','column','window','door','table','chair','sofa','bookcase','board','clutter']
+class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
 seg_label_to_cat = {}
-for i,cat in enumerate(seg_classes.keys()):
+for i, cat in enumerate(seg_classes.keys()):
     seg_label_to_cat[i] = cat
+
 
 def parse_args():
     '''PARAMETERS'''
     parser = argparse.ArgumentParser('Model')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size in testing [default: 32]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
-    parser.add_argument('--num_point', type=int, default=4096, help='Point Number [default: 4096]')
-    parser.add_argument('--log_dir', type=str, default='2021-02-27_01-22', help='Experiment root')
+    parser.add_argument('--npoints', type=int, default=4096, help='Point Number [default: 4096]')
+    parser.add_argument('--log_dir', type=str, default='2021-03-02_01-18', help='Experiment root')
     parser.add_argument('--visual', action='store_true', default=False, help='Whether visualize result [default: False]')
-    parser.add_argument('--test_area', type=int, default=5, help='Which area to use for test, option: 1-6 [default: 5]')
-    parser.add_argument('--num_votes', type=int, default=5, help='Aggregate segmentation scores with voting [default: 5]')
+    parser.add_argument('--test_area', type=int, default=5, help='Which area to use for test, option: 1-6 [default: 5]')  # check what is it TODO
+    parser.add_argument('--num_votes', type=int, default=5, help='Aggregate segmentation scores with voting [default: 5]')  # check what is it TODO
+    parser.add_argument('--point_cloud_path', type=str,
+                        default="/home/fiman/projects/DMHackathon/Pointnet_Pointnet2_pytorch/data/test_data/SCHUNK-0318448 PGN-plus-P 40, 000_NK.txt",
+                        help='point cloud for inference')
+    parser.add_argument('--use_gpu', type=bool, default='0', help='0 to run inference on cpu')
     return parser.parse_args()
+
 
 def add_vote(vote_label_pool, point_idx, pred_label, weight):
     B = pred_label.shape[0]
     N = pred_label.shape[1]
     for b in range(B):
         for n in range(N):
-            if weight[b,n]:
+            if weight[b, n]:
                 vote_label_pool[int(point_idx[b, n]), int(pred_label[b, n])] += 1
     return vote_label_pool
 
-def main(args):
+
+
+def test(args):
     def log_string(str):
         logger.info(str)
         print(str)
@@ -71,17 +82,17 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    NUM_CLASSES = 3
+    NUM_CLASSES = 2
     BATCH_SIZE = args.batch_size
     NUM_POINT = args.num_point
 
     root = 'data/custom_partseg_data/'
 
-    TEST_DATASET_WHOLE_SCENE = PartCustomDataset(root, split='test', npoints=NUM_POINT, is_train=True)
-    log_string("The number of test data is: %d" %  len(TEST_DATASET_WHOLE_SCENE))
+    TEST_DATASET_WHOLE_SCENE = PartCustomDataset(root, split='val', npoints=NUM_POINT, is_train=False, minimal_preprocess=False)
+    log_string("The number of test data is: %d" % len(TEST_DATASET_WHOLE_SCENE))
 
     '''MODEL LOADING'''
-    model_name = os.listdir(experiment_dir+'/logs')[0].split('.')[0]
+    model_name = os.listdir(experiment_dir + '/logs')[0].split('.')[0]
     MODEL = importlib.import_module(model_name)
     classifier = MODEL.get_model(NUM_CLASSES).cuda()
     checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model.pth')
@@ -99,7 +110,7 @@ def main(args):
         log_string('---- EVALUATION WHOLE SCENE----')
 
         for batch_idx in range(num_batches):
-            print("visualize [%d/%d] %s ..." % (batch_idx+1, num_batches, scene_id[batch_idx]))
+            print("visualize [%d/%d] %s ..." % (batch_idx + 1, num_batches, scene_id[batch_idx]))
             total_seen_class_tmp = [0 for _ in range(NUM_CLASSES)]
             total_correct_class_tmp = [0 for _ in range(NUM_CLASSES)]
             total_iou_deno_class_tmp = [0 for _ in range(NUM_CLASSES)]
@@ -130,7 +141,7 @@ def main(args):
                     batch_data[:, :, 3:6] /= 1.0
 
                     torch_data = torch.Tensor(batch_data)
-                    torch_data= torch_data.float().cuda()
+                    torch_data = torch_data.float().cuda()
                     torch_data = torch_data.transpose(2, 1)
                     seg_pred, _ = classifier(torch_data)
                     batch_pred_label = seg_pred.contiguous().cpu().data.max(2)[1].numpy()
@@ -166,12 +177,12 @@ def main(args):
                 color_gt = g_label2color[whole_scene_label[i]]
                 if args.visual:
                     fout.write('v %f %f %f %d %d %d\n' % (
-                    whole_scene_data[i, 0], whole_scene_data[i, 1], whole_scene_data[i, 2], color[0], color[1],
-                    color[2]))
+                        whole_scene_data[i, 0], whole_scene_data[i, 1], whole_scene_data[i, 2], color[0], color[1],
+                        color[2]))
                     fout_gt.write(
                         'v %f %f %f %d %d %d\n' % (
-                        whole_scene_data[i, 0], whole_scene_data[i, 1], whole_scene_data[i, 2], color_gt[0],
-                        color_gt[1], color_gt[2]))
+                            whole_scene_data[i, 0], whole_scene_data[i, 1], whole_scene_data[i, 2], color_gt[0],
+                            color_gt[1], color_gt[2]))
             if args.visual:
                 fout.close()
                 fout_gt.close()
@@ -187,10 +198,12 @@ def main(args):
         log_string('eval whole scene point avg class acc: %f' % (
             np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float) + 1e-6))))
         log_string('eval whole scene point accuracy: %f' % (
-                    np.sum(total_correct_class) / float(np.sum(total_seen_class) + 1e-6)))
+                np.sum(total_correct_class) / float(np.sum(total_seen_class) + 1e-6)))
 
         print("Done!")
 
+
+
 if __name__ == '__main__':
     args = parse_args()
-    main(args)
+    test(args)

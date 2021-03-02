@@ -18,4 +18,10 @@ class TensorBoardHandler:
         writer = self.get_writer(phase)
         writer.add_scalar("Accuracy/", acc, epoch)
 
+    def write_mIoU(self, phase, acc, epoch):
+        writer = self.get_writer(phase)
+        writer.add_scalar("mIoU/", acc, epoch)
+
+
+
 

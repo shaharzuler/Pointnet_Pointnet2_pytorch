@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--npoints', type=int, default=4096, help='Point Number [default: 4096]')
     parser.add_argument('--log_dir', type=str, default='2021-03-02_01-18', help='Experiment root')
     parser.add_argument('--point_cloud_path', type=str,
-                        default="/home/fiman/projects/DMHackathon/Pointnet_Pointnet2_pytorch/data/test_data/SCHUNK-39318568 PGN-plus-P 125-1-V, 000.txt",
+                        default="data/test_data/SCHUNK-39318568 PGN-plus-P 125-1-V, 000.txt",
                         help='point cloud for inference')
     parser.add_argument('--use_gpu', type=bool, default='0', help='0 to run inference on cpu')
     return parser.parse_args()
@@ -54,7 +54,7 @@ def inference(args):
     visual_dir = experiment_dir + '/visual/'
     visual_dir = Path(visual_dir)
     visual_dir.mkdir(exist_ok=True)
-    prediction_dir = os.path.join(experiment_dir,"predictions")
+    prediction_dir = os.path.join(experiment_dir, "predictions")
     Path(prediction_dir).mkdir(exist_ok=True)
     '''LOG'''
     args = parse_args()
@@ -76,7 +76,8 @@ def inference(args):
     classifier = MODEL.get_model(NUM_CLASSES)
     if args.use_gpu == "1":
         classifier = classifier.cuda()
-    checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model.pth')
+    device = 'gpu' if args.use_gpu == "1" else 'cpu'
+    checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model.pth', map_location=device)
     classifier.load_state_dict(checkpoint['model_state_dict'])
     classifier = classifier.eval()
 
@@ -102,14 +103,14 @@ def inference(args):
         seg_pred, _ = classifier(tensor_point_cloud)
 
         pred_labels = np.argmax(seg_pred.contiguous().cpu().data[0, :, :].numpy(), 1)
-        point_set = point_set[0,:,:].transpose()
-        VisualizationUtils().save_point_cloud_image(os.path.join(experiment_dir + '/images', "e_" + args.point_cloud_path.split("/")[-1].replace(".txt","")+"_inference" + ".png"),
-                                                    point_set,
-                                                    pred_labels,
-                                                    None)
+        point_set = point_set[0, :, :].transpose()
+        VisualizationUtils().save_point_cloud_image(
+            os.path.join(experiment_dir + '/images', "e_" + args.point_cloud_path.split("/")[-1].replace(".txt", "") + "_inference" + ".png"),
+            point_set,
+            pred_labels,
+            None)
 
         return downsample_ind, point_set, pred_labels, original_shape, experiment_dir, prediction_dir
-
 
 
 def kmeans(point_set, pred_labels):
@@ -121,7 +122,7 @@ def upsample(downsample_ind, pred_labels_3_classes, original_shape, prediction_d
     pred_labels_3_classes += 1
     results = np.zeros([original_shape])
     results[downsample_ind] = pred_labels_3_classes
-    np.savetxt(os.path.join(prediction_dir, "results_"+args.point_cloud_path.split("/")[-1]), results.astype(np.int32), fmt='%i')
+    np.savetxt(os.path.join(prediction_dir, "results_" + args.point_cloud_path.split("/")[-1]), results.astype(np.int32), fmt='%i')
 
     return results
 

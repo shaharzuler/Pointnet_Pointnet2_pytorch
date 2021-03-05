@@ -35,7 +35,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def pc_normalize(pc):
+def pc_normalize(pc): #todo move this to utils. it's duplicaqted a few times
     centroid = np.mean(pc, axis=0)
     pc = pc - centroid
     m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))

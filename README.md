@@ -10,13 +10,13 @@ Our **Hackathon** code, forked from [yanx27/Pointnet_Pointnet2_pytorch](https://
 Our main additions:
 
 (1) supporting our dataset, which reads point clouds and label files as .txt files.
-The points are under data/Points and labels under data/Labels
+The points are under data/Points and labels under data/Labels.
 
 (2) Added prediction visualization and TensorBoard log for loss, accuracy and mIoU. The validation accuracy carries a bug from the original repo, didn't have time to fix it.
 
-(3) Added semantic segmentation inference code
+(3) Added semantic segmentation inference code.
 
-(4) optional offline preprocess to reduce training time in case of big point cloud files.
+(4) Optional offline preprocess to reduce training time in case of big point cloud files.
 
 ---
 **The rest of the README file is from the original repo:**

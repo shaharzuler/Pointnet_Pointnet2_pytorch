@@ -2,16 +2,13 @@ import numpy as np
 import warnings
 import os
 from torch.utils.data import Dataset
+
+from Pointnet_Pointnet2_pytorch.models.pointnet_util import pc_normalize
+
 warnings.filterwarnings('ignore')
 
 
 
-def pc_normalize(pc):
-    centroid = np.mean(pc, axis=0)
-    pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
-    pc = pc / m
-    return pc
 
 def farthest_point_sample(point, npoint):
     """

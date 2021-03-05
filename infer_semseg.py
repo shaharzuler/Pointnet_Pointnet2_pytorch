@@ -1,14 +1,16 @@
 import argparse
-import os
-from utils.VisualizationUtils import VisualizationUtils
-from PostProcess.PostProcess import KMeansPostProcessor
-
-import torch
-import logging
-from pathlib import Path
-import sys
 import importlib
+import logging
+import os
+import sys
+from pathlib import Path
+
 import numpy as np
+import torch
+
+from Pointnet_Pointnet2_pytorch.models.pointnet_util import pc_normalize
+from PostProcess.PostProcess import KMeansPostProcessor
+from utils.VisualizationUtils import VisualizationUtils
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -34,13 +36,6 @@ def parse_args():
     parser.add_argument('--use_gpu', type=bool, default='0', help='0 to run inference on cpu')
     return parser.parse_args()
 
-
-def pc_normalize(pc): #todo move this to utils. it's duplicaqted a few times
-    centroid = np.mean(pc, axis=0)
-    pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
-    pc = pc / m
-    return pc
 
 
 def inference(args):

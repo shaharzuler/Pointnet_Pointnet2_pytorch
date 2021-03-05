@@ -1,9 +1,10 @@
 import os
 
-from data_utils.S3DISDataLoader import PartCustomDataset
-import torch
 import numpy as np
-import tqdm
+import torch
+
+from Pointnet_Pointnet2_pytorch.data_utils.PartCustomDataset.PartCsutomDataset import PartCustomDataset
+from Pointnet_Pointnet2_pytorch.models.pointnet_util import pc_normalize
 
 npoints = 4096
 root = 'data/custom_partseg_data/'
@@ -13,19 +14,11 @@ TRAIN_DATASET = PartCustomDataset(root=root, npoints=npoints, split='train', nor
 trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=1, shuffle=True, num_workers=4)  # , pin_memory=True, drop_last=True,
 
 
-def pc_normalize(pc):
-    centroid = np.mean(pc, axis=0)
-    pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
-    pc = pc / m
-    return pc
-
-
 def write_sample(aug, pointset, seg, i):
     name = str(i) + "_" + str(aug)
-    filenames.append(name+"\n")
+    filenames.append(name + "\n")
     point_cloud_path = os.path.join(root, "Points", name + ".txt")
-    label_path = os.path.join(root, "Links", name + ".txt")
+    label_path = os.path.join(root, "Labels", name + ".txt")
     np.savetxt(point_cloud_path, pointset)
     np.savetxt(label_path, seg)
 

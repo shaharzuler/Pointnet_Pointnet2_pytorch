@@ -1,13 +1,13 @@
-import open3d as o3d
+import gc
+
 import numpy as np
 from mayavi import mlab
-import gc
 
 
 class VisualizationUtils():
     def __init__(self):
         #
-        self.colors = [(0.9,0.1,0.1),(0.1,0.1,0.9), (0.1,0.9,0.1)] #todo add more colors to support more classes
+        self.colors = [(0.9, 0.1, 0.1), (0.1, 0.1, 0.9), (0.1, 0.9, 0.1)]  # todo add more colors to support more classes
         # os.environ['ETS_TOOLKIT'] = 'qt4'
 
     def save_point_cloud_image(self, path, point_cloud, seg=None, target=None):
@@ -20,7 +20,7 @@ class VisualizationUtils():
             colors = self.colors[:len(pcds)]
         else:
             pcds.append(point_cloud)
-            colors=self.colors[0]
+            colors = self.colors[0]
 
         target_pcds = []
         if target is not None:
@@ -29,11 +29,11 @@ class VisualizationUtils():
                 target_pcds.append(pcd)
 
         mlab.figure(size=(300, 300))
-        for pcd,color in zip(pcds,colors):
+        for pcd, color in zip(pcds, colors):
             mlab.points3d(pcd[:, 0], pcd[:, 1], pcd[:, 2], color=color, scale_factor=0.035)
         if target is not None:
             for target_pcd, color in zip(target_pcds, colors):
-                mlab.points3d(target_pcd[:, 0]+3, target_pcd[:, 1], target_pcd[:, 2], color=color, scale_factor=0.035)
+                mlab.points3d(target_pcd[:, 0] + 3, target_pcd[:, 1], target_pcd[:, 2], color=color, scale_factor=0.035)
         mlab.view(azimuth=90, elevation=165, roll=180)
 
         # mlab.show()

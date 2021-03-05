@@ -2,6 +2,25 @@
 
 This repo is implementation for [PointNet](http://openaccess.thecvf.com/content_cvpr_2017/papers/Qi_PointNet_Deep_Learning_CVPR_2017_paper.pdf) and [PointNet++](http://papers.nips.cc/paper/7095-pointnet-deep-hierarchical-feature-learning-on-point-sets-in-a-metric-space.pdf) in pytorch.
 
+##General Update
+**2021/5/3**
+
+Our **Hackathon** code, forked from [yanx27/Pointnet_Pointnet2_pytorch](https://github.com/yanx27/Pointnet_Pointnet2_pytorch)
+
+Our main additions:
+
+(1) supporting our dataset, which reads point clouds and label files as .txt files.
+The points are under data/Points and labels under data/Labels
+
+(2) Added prediction visualization and TensorBoard log for loss, accuracy and mIoU. The validation accuracy carries a bug from the original repo, didn't have time to fix it.
+
+(3) Added semantic segmentation inference code
+
+(4) optional offline preprocess to reduce training time in case of big point cloud files.
+
+---
+**The rest of the README file is from the original repo:**
+
 ## Update
 **2019/11/26:**
 
